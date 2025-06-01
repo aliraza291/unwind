@@ -35,7 +35,7 @@ export class Schedule extends Model {
   @Column({ type: 'int', default: 0 })
   gapBetweenSlots: number;
 
-  @Column({ type: 'date', nullable: true })
+  @Column({ type: 'timestamptz', nullable: true })
   date: string; // YYYY-MM-DD format
 
   @Column({

@@ -17,7 +17,6 @@ export class SchedulesService {
     @InjectRepository(Therapist)
     private therapistsRepository: Repository<Therapist>,
   ) {}
-
   async createScheduleRange(
     createScheduleRangeDto: CreateScheduleRangeDto,
   ): Promise<Schedule[]> {
@@ -47,9 +46,9 @@ export class SchedulesService {
       textFee = 0,
     } = createScheduleRangeDto;
 
-    // Convert string dates to Date objects (UTC)
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+    // Convert string dates to UTC Date objects properly
+    const start = this.parseUTCDate(startDate);
+    const end = this.parseUTCDate(endDate);
 
     if (start > end) {
       throw new BadRequestException('Start date must be before end date');
@@ -96,10 +95,10 @@ export class SchedulesService {
     const selectedDayNumbers = daysOfWeek.map((day) => dayMapping[day]);
     const schedulesToCreate: Partial<Schedule>[] = [];
 
-    // Iterate through each day in the date range
-    const currentDate = new Date(start);
+    // Iterate through each day in the date range using UTC
+    const currentDate = start;
     while (currentDate <= end) {
-      const dayOfWeek = currentDate.getUTCDay(); // Use UTC day
+      const dayOfWeek = currentDate.getUTCDay();
 
       // Check if current day is in the selected days
       if (selectedDayNumbers.includes(dayOfWeek)) {
@@ -109,14 +108,14 @@ export class SchedulesService {
 
         // Create slots for each time slot
         for (const slot of timeSlots) {
-          // Format current date for comparison (YYYY-MM-DD)
-          const currentDateString = currentDate.toISOString().split('T')[0];
+          // Format current date in UTC for consistency
+          const currentDateString = currentDate.toISOString();
 
           // Check if schedule already exists for this specific date and time slot
           const existingSchedule = await this.schedulesRepository.findOne({
             where: {
               therapistId,
-              date: currentDateString, // Check specific date instead of just dayOfWeek
+              date: currentDateString,
               startTime: slot.startTime,
               endTime: slot.endTime,
             },
@@ -125,7 +124,7 @@ export class SchedulesService {
           if (!existingSchedule) {
             schedulesToCreate.push({
               dayOfWeek: dayOfWeekEnum,
-              date: currentDateString, // Add specific date
+              date: currentDateString,
               startTime: slot.startTime,
               endTime: slot.endTime,
               status: SlotStatus.AVAILABLE,
@@ -139,7 +138,7 @@ export class SchedulesService {
         }
       }
 
-      // Move to next day (UTC)
+      // Move to next day using UTC
       currentDate.setUTCDate(currentDate.getUTCDate() + 1);
     }
 
@@ -154,6 +153,59 @@ export class SchedulesService {
     const savedSchedules = await this.schedulesRepository.save(schedules);
 
     return savedSchedules;
+  }
+
+  async findByDateRange(
+    therapistId: string,
+    startDate: string,
+    endDate: string,
+    status?,
+  ): Promise<Schedule[]> {
+    // Verify therapist exists
+    const therapist = await this.therapistsRepository.findOne({
+      where: { id: therapistId },
+    });
+
+    if (!therapist) {
+      throw new NotFoundException(`Therapist with ID ${therapistId} not found`);
+    }
+
+    // Parse dates in UTC
+    const start = this.parseUTCDate(startDate);
+    const end = this.parseUTCDate(endDate);
+
+    if (start > end) {
+      throw new BadRequestException('Start date must be before end date');
+    }
+
+    // Generate all dates in the range using UTC
+    const datesInRange: string[] = [];
+    const currentDate = new Date(start);
+
+    while (currentDate <= end) {
+      const dateString = this.formatUTCDate(currentDate);
+      datesInRange.push(dateString);
+      currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+    }
+
+    const whereCondition: any = {
+      therapistId,
+      date: In(datesInRange),
+    };
+
+    // Add status filter if provided
+    if (status) {
+      whereCondition.status = status;
+    }
+
+    // Use TypeORM's In operator to find schedules for all dates in range
+    return this.schedulesRepository.find({
+      where: whereCondition,
+      order: {
+        date: 'ASC',
+        startTime: 'ASC',
+      },
+    });
   }
 
   // Helper method to generate time slots
@@ -204,94 +256,30 @@ export class SchedulesService {
     return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
   }
 
-  // Keep your existing isValidTimeFormat method
-
   // Helper method to validate time format (HH:MM)
   private isValidTimeFormat(time: string): boolean {
     const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
     return timeRegex.test(time);
   }
 
-  // Helper method to get dates for specific days in a range
-  private getDatesForDaysInRange(
-    startDate: Date,
-    endDate: Date,
-    selectedDays: DayOfWeek[],
-  ): Date[] {
-    const dayMapping = {
-      [DayOfWeek.SUNDAY]: 0,
-      [DayOfWeek.MONDAY]: 1,
-      [DayOfWeek.TUESDAY]: 2,
-      [DayOfWeek.WEDNESDAY]: 3,
-      [DayOfWeek.THURSDAY]: 4,
-      [DayOfWeek.FRIDAY]: 5,
-      [DayOfWeek.SATURDAY]: 6,
-    };
-
-    const selectedDayNumbers = selectedDays.map((day) => dayMapping[day]);
-    const dates: Date[] = [];
-
-    const currentDate = new Date(startDate);
-    while (currentDate <= endDate) {
-      if (selectedDayNumbers.includes(currentDate.getUTCDay())) {
-        dates.push(new Date(currentDate));
-      }
-      currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+  // NEW: Helper method to parse date string as UTC
+  private parseUTCDate(dateString: string): Date {
+    // Ensure the date string is treated as UTC by appending 'T00:00:00.000Z' if needed
+    if (dateString.includes('T')) {
+      return new Date(dateString);
     }
 
-    return dates;
+    // For YYYY-MM-DD format, explicitly create UTC date
+    const [year, month, day] = dateString.split('-').map(Number);
+    return new Date(Date.UTC(year, month - 1, day)); // month is 0-indexed in Date constructor
   }
 
-  async findByDateRange(
-    therapistId: string,
-    startDate: string,
-    endDate: string,
-    status,
-  ): Promise<Schedule[]> {
-    // Verify therapist exists
-    const therapist = await this.therapistsRepository.findOne({
-      where: { id: therapistId },
-    });
-
-    if (!therapist) {
-      throw new NotFoundException(`Therapist with ID ${therapistId} not found`);
-    }
-
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-
-    if (start > end) {
-      throw new BadRequestException('Start date must be before end date');
-    }
-
-    // Generate all dates in the range
-    const datesInRange: string[] = [];
-    const currentDate = new Date(start);
-
-    while (currentDate <= end) {
-      const dateString = currentDate.toISOString().split('T')[0]; // YYYY-MM-DD format
-      datesInRange.push(dateString);
-      currentDate.setUTCDate(currentDate.getUTCDate() + 1);
-    }
-
-    const whereCondition: any = {
-      therapistId,
-      date: In(datesInRange),
-    };
-
-    // Add status filter if provided
-    if (status) {
-      whereCondition.status = status;
-    }
-
-    // Use TypeORM's In operator to find schedules for all dates in range
-    return this.schedulesRepository.find({
-      where: whereCondition,
-      order: {
-        date: 'ASC',
-        startTime: 'ASC',
-      },
-    });
+  // NEW: Helper method to format date as UTC string (YYYY-MM-DD)
+  private formatUTCDate(date: Date): string {
+    const year = date.getUTCFullYear();
+    const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
+    const day = date.getUTCDate().toString().padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 
   async findAll(filters: {

@@ -17,7 +17,7 @@ import {
   ApiQuery,
   ApiBearerAuth,
 } from '@nestjs/swagger';
-import { Schedule } from './entities/schedule.entity';
+import { Schedule, SlotStatus } from './entities/schedule.entity';
 import { JwtAuthGuard } from '../auth/guards/local-auth.guard';
 import { SchedulesService } from './entities/schedules.service';
 import { CreateScheduleRangeDto } from './dto/create-schedule.dto';
@@ -73,15 +73,24 @@ export class SchedulesController {
       'Return schedule slots for the therapist within the date range',
     type: [Schedule],
   })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: SlotStatus, // ✅ Use enum here to document possible values
+    type: String, // ✅ Valid type
+    description: 'Status of the slot',
+  })
   findByDateRange(
     @Param('therapistId') therapistId: string,
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
+    @Query('status') status?: SlotStatus,
   ) {
     return this.schedulesService.findByDateRange(
       therapistId,
       startDate,
       endDate,
+      status
     );
   }
 

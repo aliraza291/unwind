@@ -38,16 +38,32 @@ export class CreateScheduleRangeDto {
   daysOfWeek: DayOfWeek[];
 
   @ApiProperty({ description: 'Start time in HH:MM format', example: '09:00' })
-  @IsOptional()
   @IsNotEmpty()
   @IsString()
   startTime: string;
 
   @ApiProperty({ description: 'End time in HH:MM format', example: '17:00' })
-  @IsOptional()
   @IsNotEmpty()
   @IsString()
   endTime: string;
+
+  @ApiProperty({
+    description: 'Duration of each slot in minutes',
+    example: 30,
+    default: 30,
+  })
+  @IsOptional()
+  @IsNumber()
+  slotDuration?: number = 30;
+
+  @ApiProperty({
+    description: 'Gap between slots in minutes',
+    example: 0,
+    default: 0,
+  })
+  @IsOptional()
+  @IsNumber()
+  gapBetweenSlots?: number = 0;
 
   @ApiProperty({ description: 'ID of the therapist' })
   @IsNotEmpty()

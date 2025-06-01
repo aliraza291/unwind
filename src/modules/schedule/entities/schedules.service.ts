@@ -4,7 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import type { Repository } from 'typeorm';
+import { In, type Repository } from 'typeorm';
 import { Schedule, SlotStatus, DayOfWeek } from './schedule.entity';
 import { Therapist } from '../../users/entities/therapist.entity';
 import { CreateScheduleRangeDto } from '../dto/create-schedule.dto';
@@ -39,6 +39,8 @@ export class SchedulesService {
       startTime,
       endTime,
       therapistId,
+      slotDuration = 30,
+      gapBetweenSlots = 0,
       audioFee = 0,
       videoFee = 0,
       audioVideoFee = 0,
@@ -59,6 +61,25 @@ export class SchedulesService {
       !this.isValidTimeFormat(endTime)
     ) {
       throw new BadRequestException('Invalid time format. Use HH:MM format');
+    }
+
+    // Validate slot duration
+    if (slotDuration <= 0) {
+      throw new BadRequestException('Slot duration must be greater than 0');
+    }
+
+    // Generate time slots
+    const timeSlots = this.generateTimeSlots(
+      startTime,
+      endTime,
+      slotDuration,
+      gapBetweenSlots,
+    );
+
+    if (timeSlots.length === 0) {
+      throw new BadRequestException(
+        'No valid time slots can be generated with the given parameters',
+      );
     }
 
     // Map DayOfWeek enum to JavaScript day numbers (0 = Sunday, 1 = Monday, etc.)
@@ -86,28 +107,35 @@ export class SchedulesService {
           (key) => dayMapping[key as DayOfWeek] === dayOfWeek,
         ) as DayOfWeek;
 
-        // Check if schedule already exists for this day and time
-        const existingSchedule = await this.schedulesRepository.findOne({
-          where: {
-            therapistId,
-            dayOfWeek: dayOfWeekEnum,
-            startTime,
-            endTime,
-          },
-        });
+        // Create slots for each time slot
+        for (const slot of timeSlots) {
+          // Format current date for comparison (YYYY-MM-DD)
+          const currentDateString = currentDate.toISOString().split('T')[0];
 
-        if (!existingSchedule) {
-          schedulesToCreate.push({
-            dayOfWeek: dayOfWeekEnum,
-            startTime,
-            endTime,
-            status: SlotStatus.AVAILABLE,
-            audioFee,
-            videoFee,
-            audioVideoFee,
-            textFee,
-            therapistId,
+          // Check if schedule already exists for this specific date and time slot
+          const existingSchedule = await this.schedulesRepository.findOne({
+            where: {
+              therapistId,
+              date: currentDateString, // Check specific date instead of just dayOfWeek
+              startTime: slot.startTime,
+              endTime: slot.endTime,
+            },
           });
+
+          if (!existingSchedule) {
+            schedulesToCreate.push({
+              dayOfWeek: dayOfWeekEnum,
+              date: currentDateString, // Add specific date
+              startTime: slot.startTime,
+              endTime: slot.endTime,
+              status: SlotStatus.AVAILABLE,
+              audioFee,
+              videoFee,
+              audioVideoFee,
+              textFee,
+              therapistId,
+            });
+          }
         }
       }
 
@@ -127,6 +155,56 @@ export class SchedulesService {
 
     return savedSchedules;
   }
+
+  // Helper method to generate time slots
+  private generateTimeSlots(
+    startTime: string,
+    endTime: string,
+    slotDuration: number,
+    gapBetweenSlots: number,
+  ): Array<{ startTime: string; endTime: string }> {
+    const slots: Array<{ startTime: string; endTime: string }> = [];
+
+    // Parse start and end times
+    const [startHour, startMinute] = startTime.split(':').map(Number);
+    const [endHour, endMinute] = endTime.split(':').map(Number);
+
+    // Convert to minutes from midnight
+    const startMinutes = startHour * 60 + startMinute;
+    const endMinutes = endHour * 60 + endMinute;
+
+    if (startMinutes >= endMinutes) {
+      throw new BadRequestException('Start time must be before end time');
+    }
+
+    let currentMinutes = startMinutes;
+
+    while (currentMinutes + slotDuration <= endMinutes) {
+      const slotStartTime = this.minutesToTimeString(currentMinutes);
+      const slotEndTime = this.minutesToTimeString(
+        currentMinutes + slotDuration,
+      );
+
+      slots.push({
+        startTime: slotStartTime,
+        endTime: slotEndTime,
+      });
+
+      // Move to next slot (add slot duration + gap)
+      currentMinutes += slotDuration + gapBetweenSlots;
+    }
+
+    return slots;
+  }
+
+  // Helper method to convert minutes to HH:MM format
+  private minutesToTimeString(minutes: number): string {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+  }
+
+  // Keep your existing isValidTimeFormat method
 
   // Helper method to validate time format (HH:MM)
   private isValidTimeFormat(time: string): boolean {
@@ -168,6 +246,7 @@ export class SchedulesService {
     therapistId: string,
     startDate: string,
     endDate: string,
+    status,
   ): Promise<Schedule[]> {
     // Verify therapist exists
     const therapist = await this.therapistsRepository.findOne({
@@ -185,36 +264,31 @@ export class SchedulesService {
       throw new BadRequestException('Start date must be before end date');
     }
 
-    // Get all days of week that fall within the date range
-    const daysInRange: DayOfWeek[] = [];
+    // Generate all dates in the range
+    const datesInRange: string[] = [];
     const currentDate = new Date(start);
 
-    const dayMapping = {
-      0: DayOfWeek.SUNDAY,
-      1: DayOfWeek.MONDAY,
-      2: DayOfWeek.TUESDAY,
-      3: DayOfWeek.WEDNESDAY,
-      4: DayOfWeek.THURSDAY,
-      5: DayOfWeek.FRIDAY,
-      6: DayOfWeek.SATURDAY,
-    };
-
     while (currentDate <= end) {
-      const dayOfWeek =
-        dayMapping[currentDate.getUTCDay() as keyof typeof dayMapping];
-      if (!daysInRange.includes(dayOfWeek)) {
-        daysInRange.push(dayOfWeek);
-      }
+      const dateString = currentDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+      datesInRange.push(dateString);
       currentDate.setUTCDate(currentDate.getUTCDate() + 1);
     }
 
+    const whereCondition: any = {
+      therapistId,
+      date: In(datesInRange),
+    };
+
+    // Add status filter if provided
+    if (status) {
+      whereCondition.status = status;
+    }
+
+    // Use TypeORM's In operator to find schedules for all dates in range
     return this.schedulesRepository.find({
-      where: {
-        therapistId,
-        dayOfWeek: daysInRange.length > 0 ? daysInRange[0] : undefined, // This needs to be improved for multiple days
-      },
+      where: whereCondition,
       order: {
-        dayOfWeek: 'ASC',
+        date: 'ASC',
         startTime: 'ASC',
       },
     });

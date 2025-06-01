@@ -22,6 +22,7 @@ import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { LoginDto } from './dto/login.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { UserType } from '@/common/enums/role-type.enum';
+import { ResendOtpDto } from './dto/resend-otp';
 
 @Injectable()
 export class AuthService {
@@ -276,6 +277,40 @@ export class AuthService {
         message: 'Email verified successfully',
         userType: user.userType,
       };
+    }
+  }
+
+    async resendOtp(data: ResendOtpDto) {
+    let existingUser = null;
+
+    if (data.userType === UserType.INDIVIDUAL) {
+      existingUser = await this.individualRepository.findOne({
+        where: { email: data.email },
+      });
+    } else {
+      existingUser = await this.therapistRepository.findOne({
+        where: { email: data.email },
+      });
+    }
+
+    if (!existingUser) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (existingUser) {
+      const { otp, expiry } = this.otpService.generateOtp();
+      existingUser.otp = otp;
+      existingUser.otpExpiry = expiry;
+      existingUser.email = data.email;
+
+      if (data.userType === UserType.INDIVIDUAL) {
+        await this.individualRepository.save(existingUser);
+      } else {
+        await this.therapistRepository.save(existingUser);
+      }
+
+      // Send OTP email
+      await this.otpService.sendOtpByEmail(existingUser.email, otp);
     }
   }
 

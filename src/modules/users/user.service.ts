@@ -6,6 +6,9 @@ import { TherapistEmployment } from './entities/therapistEmployement.entity';
 import { TherapistProfileCompletionDto } from './dto/profile-complition.dto';
 import { Therapist } from './entities/therapist.entity';
 import { TherapistQualification } from './entities/therapistQualification.entity';
+import { UserType } from '@/common/enums/role-type.enum';
+import { Company } from './entities/company.entity';
+import { Individual } from './entities/individual.entity';
 
 @Injectable()
 export class UserService {
@@ -16,6 +19,10 @@ export class UserService {
     private therapistEmploymentRepository: Repository<TherapistEmployment>,
     @InjectRepository(TherapistQualification)
     private therapistQualificationRepository: Repository<TherapistQualification>,
+    @InjectRepository(Company)
+    private companyRepository: Repository<Company>,
+    @InjectRepository(Individual)
+    private individualRepository: Repository<Individual>,
   ) {}
 
   async completeTherapistProfile(
@@ -167,5 +174,78 @@ export class UserService {
         employmentHistory: hasEmployment,
       },
     };
+  }
+  async findOneUser(userId: string, userType: UserType) {
+    if (userType === UserType.COMPANY) {
+      const company = await this.companyRepository.findOne({
+        where: { id: userId },
+      });
+
+      if (!company) {
+        throw new NotFoundException('Company not found');
+      }
+
+      let {
+        passwordHash,
+        otpExpiry,
+        otp,
+        resetPasswordToken,
+        resetPasswordExpiry,
+        ...remaoingCompanyDetails
+      } = company;
+
+      return {
+        ...remaoingCompanyDetails,
+      };
+    } else {
+      // If not a company, check for users (individual or therapist)
+
+      let user = null;
+
+      if (userType === UserType.INDIVIDUAL) {
+        user = await this.individualRepository.findOne({
+          where: { id: userId },
+        });
+      } else {
+        user = await this.therapistRepository.findOne({
+          where: { id: userId },
+          relations: ['qualifications', 'employmentHistory'],
+        });
+      }
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      let {
+        password,
+        otpExpiry,
+        otp,
+        resetPasswordToken,
+        resetPasswordExpiry,
+        ...remaoingUserDetails
+      } = user;
+
+      return {
+        ...remaoingUserDetails,
+      };
+    }
+  }
+
+  async getUserProfile(userFromToken: any) {
+    console.log('userFromToken', userFromToken);
+    if (!userFromToken?.id) {
+      throw new NotFoundException('User not found');
+    } else {
+      return await this.findOneUser(userFromToken?.id, userFromToken?.userType);
+    }
+  }
+
+  async getAllTherapist() {
+    return await this.therapistRepository.findAndCount();
+  }
+
+  async getAllIndividual() {
+    return await this.individualRepository.findAndCount();
   }
 }

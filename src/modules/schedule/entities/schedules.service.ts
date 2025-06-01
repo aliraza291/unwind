@@ -170,9 +170,18 @@ export class SchedulesService {
       throw new NotFoundException(`Therapist with ID ${therapistId} not found`);
     }
 
-    // Parse dates in UTC
-    const start = this.parseUTCDate(startDate);
-    const end = this.parseUTCDate(endDate);
+    // Parse dates in UTC - properly convert string dates to Date objects
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    // Validate that the dates are valid
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      throw new BadRequestException('Invalid date format provided');
+    }
+
+    // Normalize to start of day in UTC to ensure consistent date comparison
+    start.setUTCHours(0, 0, 0, 0);
+    end.setUTCHours(23, 59, 59, 999);
 
     if (start > end) {
       throw new BadRequestException('Start date must be before end date');
@@ -188,6 +197,12 @@ export class SchedulesService {
       currentDate.setUTCDate(currentDate.getUTCDate() + 1);
     }
 
+    // Debug logging
+    console.log('Therapist ID:', therapistId);
+    console.log('Start Date:', startDate);
+    console.log('End Date:', endDate);
+    console.log('Dates in Range:', datesInRange);
+
     const whereCondition: any = {
       therapistId,
       date: In(datesInRange),
@@ -198,14 +213,25 @@ export class SchedulesService {
       whereCondition.status = status;
     }
 
-    // Use TypeORM's In operator to find schedules for all dates in range
-    return this.schedulesRepository.find({
-      where: whereCondition,
-      order: {
-        date: 'ASC',
-        startTime: 'ASC',
-      },
-    });
+    console.log('Where Condition:', whereCondition);
+
+    // Alternative: Use date range comparison instead of IN clause
+    const queryBuilder =
+      this.schedulesRepository.createQueryBuilder('schedule');
+
+    const results = await queryBuilder
+      .where('schedule.therapistId = :therapistId', { therapistId })
+      .andWhere('schedule.date >= :startDate', { startDate: start })
+      .andWhere('schedule.date <= :endDate', { endDate: end })
+      .andWhere(status ? 'schedule.status = :status' : '1=1', { status })
+      .orderBy('schedule.date', 'ASC')
+      .addOrderBy('schedule.startTime', 'ASC')
+      .getMany();
+
+    console.log('Query Results Count:', results.length);
+    console.log('First few results:', results.slice(0, 3));
+
+    return results;
   }
 
   // Helper method to generate time slots

@@ -10,29 +10,46 @@ import Model from '@/common/entities/base.entity';
 import { Therapist } from '@/modules/users/entities/therapist.entity';
 import { Individual } from '@/modules/users/entities/individual.entity';
 
+export enum GroupTherapyTopic {
+  DEPRESSION = 'Depression',
+  ANXIETY = 'Anxiety',
+  ADHD = 'ADHD',
+  SLEEP_DISORDER = 'Sleep Disorder',
+  BIPOLAR_DISORDER = 'Bipolar Disorder',
+}
+
 @Entity()
 export class GroupTherapy extends Model {
   @Column()
-  name: string;
-
-  @Column({ type: 'text', nullable: true })
-  description: string;
-
-  @Column({ type: 'timestamp' })
-  startTime: Date;
-
-  @Column({ type: 'timestamp' })
-  endTime: Date;
-
-  @Column({ default: 0 })
-  maxParticipants: number;
-
-  @ManyToOne(() => Therapist, (therapist) => therapist.groupTherapies)
-  @JoinColumn({ name: 'therapistId' })
-  therapist: Therapist;
+  title: string;
 
   @Column()
-  therapistId: string;
+  numberOfSessions: number;
+
+  @Column({
+    type: 'enum',
+    enum: GroupTherapyTopic,
+  })
+  discussionTopic: GroupTherapyTopic;
+
+  @Column({ type: 'text', nullable: true })
+  aboutTheSession: string;
+
+  @Column({ type: 'timestamp' })
+  date: Date;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2 })
+  sessionPrice: number;
+
+  @Column({ default: 0 })
+  participantCapacity: number;
+
+  @ManyToOne(() => Therapist, (therapist) => therapist.groupTherapies)
+  @JoinColumn({ name: 'moderatorId' })
+  moderator: Therapist;
+
+  @Column()
+  moderatorId: string;
 
   @ManyToMany(() => Individual, (individual) => individual.groupTherapySessions)
   @JoinTable({
@@ -41,4 +58,14 @@ export class GroupTherapy extends Model {
     inverseJoinColumn: { name: 'individualId', referencedColumnName: 'id' },
   })
   participants: Individual[];
+
+  // Virtual property to get current participant count
+  get currentParticipantCount(): number {
+    return this.participants ? this.participants.length : 0;
+  }
+
+  // Check if group is full
+  get isFull(): boolean {
+    return this.currentParticipantCount >= this.participantCapacity;
+  }
 }

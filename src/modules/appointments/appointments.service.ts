@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Repository } from 'typeorm';
@@ -22,6 +23,13 @@ import { Individual } from '../users/entities/individual.entity';
 import type { UpdateAppointmentDto } from './dto/update-appointment.dto';
 import type { CreateNoteDto } from './dto/create-note.dto';
 import type { CreateAppointmentDto } from './dto/create-appointment.dto';
+import { GroupTherapy } from './entities/group.therapy.entity';
+import {
+  CreateGroupTherapyDto,
+  GroupTherapyQueryDto,
+  JoinGroupTherapyDto,
+  UpdateGroupTherapyDto,
+} from './dto/create-group-therepy.dto';
 
 @Injectable()
 export class AppointmentsService {
@@ -36,6 +44,8 @@ export class AppointmentsService {
     private individualsRepository: Repository<Individual>,
     @InjectRepository(Schedule)
     readonly scheduleRepository: Repository<Schedule>,
+    @InjectRepository(GroupTherapy)
+    private groupTherapyRepository: Repository<GroupTherapy>,
   ) {}
 
   async create(
@@ -154,6 +164,8 @@ export class AppointmentsService {
     status?: string;
     startDate?: string;
     endDate?: string;
+    therapistId?: string;
+    clientId?: string;
   }) {
     const queryBuilder = this.appointmentsRepository
       .createQueryBuilder('appointment')
@@ -165,7 +177,16 @@ export class AppointmentsService {
         status: options.status,
       });
     }
-
+    if (options.therapistId) {
+      queryBuilder.andWhere('therapist.id:id', {
+        id: options.therapistId,
+      });
+    }
+    if (options.clientId) {
+      queryBuilder.andWhere('patient.id:id', {
+        id: options.clientId,
+      });
+    }
     if (options.startDate) {
       const startDate = new Date(options.startDate);
       startDate.setHours(0, 0, 0, 0);
@@ -617,6 +638,244 @@ export class AppointmentsService {
       startDate: startDate.toISOString().split('T')[0],
       endDate: endDate.toISOString().split('T')[0],
       schedule: weeklySchedule,
+    };
+  }
+
+  async creatSession(
+    createGroupTherapyDto: CreateGroupTherapyDto,
+  ): Promise<GroupTherapy> {
+    // Verify moderator exists
+    const moderator = await this.therapistsRepository.findOne({
+      where: { id: createGroupTherapyDto.moderatorId },
+    });
+
+    if (!moderator) {
+      throw new NotFoundException('Moderator not found');
+    }
+
+    // Check if the date is in the future
+    if (new Date(createGroupTherapyDto.date) <= new Date()) {
+      throw new BadRequestException('Session date must be in the future');
+    }
+
+    const groupTherapy = this.groupTherapyRepository.create({
+      ...createGroupTherapyDto,
+      moderator,
+    });
+
+    return await this.groupTherapyRepository.save(groupTherapy);
+  }
+
+  async findAllSession(query: GroupTherapyQueryDto) {
+    const { topic, moderatorId, availableOnly, page = 1, limit = 10 } = query;
+
+    const queryBuilder = this.groupTherapyRepository
+      .createQueryBuilder('groupTherapy')
+      .leftJoinAndSelect('groupTherapy.moderator', 'moderator')
+      .leftJoinAndSelect('groupTherapy.participants', 'participants')
+      .orderBy('groupTherapy.date', 'ASC');
+
+    if (topic) {
+      queryBuilder.andWhere('groupTherapy.discussionTopic = :topic', { topic });
+    }
+
+    if (moderatorId) {
+      queryBuilder.andWhere('groupTherapy.moderatorId = :moderatorId', {
+        moderatorId,
+      });
+    }
+
+    if (availableOnly) {
+      queryBuilder.andWhere(
+        'COALESCE(array_length(ARRAY(SELECT 1 FROM group_therapy_participants WHERE "groupTherapyId" = groupTherapy.id), 1), 0) < groupTherapy.participantCapacity',
+      );
+    }
+
+    // Only show future sessions
+    queryBuilder.andWhere('groupTherapy.date > :now', { now: new Date() });
+
+    const [data, total] = await queryBuilder
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async findOneSession(id: string): Promise<GroupTherapy> {
+    const groupTherapy = await this.groupTherapyRepository.findOne({
+      where: { id },
+      relations: ['moderator', 'participants'],
+    });
+
+    if (!groupTherapy) {
+      throw new NotFoundException('Group therapy session not found');
+    }
+
+    return groupTherapy;
+  }
+
+  async updateSession(
+    id: string,
+    updateGroupTherapyDto: UpdateGroupTherapyDto,
+  ): Promise<GroupTherapy> {
+    const groupTherapy = await this.groupTherapyRepository.findOne({
+      where: { id: id },
+    });
+
+    // If updating moderator, verify new moderator exists
+    if (updateGroupTherapyDto.moderatorId) {
+      const moderator = await this.therapistsRepository.findOne({
+        where: { id: updateGroupTherapyDto.moderatorId },
+      });
+
+      if (!moderator) {
+        throw new NotFoundException('Moderator not found');
+      }
+    }
+
+    // Check if the new date is in the future
+    if (
+      updateGroupTherapyDto.date &&
+      new Date(updateGroupTherapyDto.date) <= new Date()
+    ) {
+      throw new BadRequestException('Session date must be in the future');
+    }
+
+    // If reducing capacity, check if current participants exceed new capacity
+    if (updateGroupTherapyDto.participantCapacity) {
+      const currentParticipantCount = groupTherapy.participants?.length || 0;
+      if (updateGroupTherapyDto.participantCapacity < currentParticipantCount) {
+        throw new BadRequestException(
+          `Cannot reduce capacity below current participant count (${currentParticipantCount})`,
+        );
+      }
+    }
+
+    Object.assign(groupTherapy, updateGroupTherapyDto);
+    return await this.groupTherapyRepository.save(groupTherapy);
+  }
+
+  async removeSession(id: string): Promise<void> {
+    const groupTherapy = await this.groupTherapyRepository.findOne({
+      where: { id: id },
+    });
+    await this.groupTherapyRepository.remove(groupTherapy);
+  }
+
+  async joinSession(
+    id: string,
+    joinGroupTherapyDto: JoinGroupTherapyDto,
+  ): Promise<GroupTherapy> {
+    const groupTherapy = await this.groupTherapyRepository.findOne({
+      where: { id: id },
+    });
+
+    // Check if session is full
+    if (groupTherapy.isFull) {
+      throw new ConflictException('Group therapy session is full');
+    }
+
+    // Check if session date has passed
+    if (new Date(groupTherapy.date) <= new Date()) {
+      throw new BadRequestException(
+        'Cannot join a session that has already started or passed',
+      );
+    }
+
+    // Verify individual exists
+    const individual = await this.individualsRepository.findOne({
+      where: { id: joinGroupTherapyDto.individualId },
+    });
+
+    if (!individual) {
+      throw new NotFoundException('Individual not found');
+    }
+
+    // Check if individual is already in the session
+    const isAlreadyParticipant = groupTherapy.participants.some(
+      (participant) => participant.id === joinGroupTherapyDto.individualId,
+    );
+
+    if (isAlreadyParticipant) {
+      throw new ConflictException(
+        'Individual is already a participant in this session',
+      );
+    }
+
+    // Add participant
+    groupTherapy.participants.push(individual);
+    return await this.groupTherapyRepository.save(groupTherapy);
+  }
+
+  async leaveSession(id: string, individualId: string): Promise<GroupTherapy> {
+    const groupTherapy = await this.groupTherapyRepository.findOne({
+      where: { id: id },
+    });
+
+    // Check if session date has passed
+    if (new Date(groupTherapy.date) <= new Date()) {
+      throw new BadRequestException(
+        'Cannot leave a session that has already started or passed',
+      );
+    }
+
+    // Check if individual is a participant
+    const participantIndex = groupTherapy.participants.findIndex(
+      (participant) => participant.id === individualId,
+    );
+
+    if (participantIndex === -1) {
+      throw new NotFoundException(
+        'Individual is not a participant in this session',
+      );
+    }
+
+    // Remove participant
+    groupTherapy.participants.splice(participantIndex, 1);
+    return await this.groupTherapyRepository.save(groupTherapy);
+  }
+
+  async getSessionsByModerator(
+    moderatorId: string,
+    query: GroupTherapyQueryDto,
+  ) {
+    return this.groupTherapyRepository.find({
+      ...query,
+      where: { moderatorId },
+    });
+  }
+
+  async getSessionsByParticipant(
+    individualId: string,
+    query: GroupTherapyQueryDto,
+  ) {
+    const { page = 1, limit = 10 } = query;
+
+    const queryBuilder = this.groupTherapyRepository
+      .createQueryBuilder('groupTherapy')
+      .leftJoinAndSelect('groupTherapy.moderator', 'moderator')
+      .leftJoinAndSelect('groupTherapy.participants', 'participants')
+      .where('participants.id = :individualId', { individualId })
+      .orderBy('groupTherapy.date', 'ASC');
+
+    const [data, total] = await queryBuilder
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
     };
   }
 }

@@ -8,6 +8,7 @@ import {
   Delete,
   Query,
   UseGuards,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -24,6 +25,12 @@ import { CreateNoteDto } from './dto/create-note.dto';
 import { Appointment } from './entities/appointment.entity';
 import { JwtAuthGuard } from '../auth/guards/local-auth.guard';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
+import {
+  CreateGroupTherapyDto,
+  GroupTherapyQueryDto,
+  JoinGroupTherapyDto,
+  UpdateGroupTherapyDto,
+} from './dto/create-group-therepy.dto';
 
 @ApiTags('appointments')
 @Controller('appointments')
@@ -41,7 +48,7 @@ export class AppointmentsController {
     type: Appointment,
   })
   @ApiResponse({ status: 400, description: 'Bad request.' })
-  create(@Body() createAppointmentDto: CreateAppointmentDto) {
+  createGroupSession(@Body() createAppointmentDto: CreateAppointmentDto) {
     return this.appointmentsService.create(createAppointmentDto);
   }
 
@@ -66,17 +73,29 @@ export class AppointmentsController {
     required: false,
     description: 'Filter by end date (YYYY-MM-DD)',
   })
+  @ApiQuery({
+    name: 'therapistId',
+    required: false,
+    description: 'Filter by therapistId',
+  })
+  @ApiQuery({
+    name: 'clientId',
+    required: false,
+    description: 'Filter by PatientId',
+  })
   @ApiResponse({
     status: 200,
     description: 'Return all appointments',
     type: [Appointment],
   })
-  findAll(
+  findAllSeesion(
     @Query('page') page = 1,
     @Query('limit') limit = 10,
     @Query('status') status?: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('therapistId') therapistId?: string,
+    @Query('clientId') clientId?: string,
   ) {
     return this.appointmentsService.findAll({
       page: +page,
@@ -84,6 +103,8 @@ export class AppointmentsController {
       status,
       startDate,
       endDate,
+      therapistId,
+      clientId,
     });
   }
 
@@ -124,7 +145,7 @@ export class AppointmentsController {
     type: Appointment,
   })
   @ApiResponse({ status: 404, description: 'Appointment not found.' })
-  findOne(@Param('id') id: string) {
+  findOneSession(@Param('id') id: string) {
     return this.appointmentsService.findOne(id);
   }
 
@@ -140,7 +161,7 @@ export class AppointmentsController {
     type: Appointment,
   })
   @ApiResponse({ status: 404, description: 'Appointment not found.' })
-  update(
+  updateSession(
     @Param('id') id: string,
     @Body() updateAppointmentDto: UpdateAppointmentDto,
   ) {
@@ -157,7 +178,7 @@ export class AppointmentsController {
     description: 'The appointment has been successfully deleted.',
   })
   @ApiResponse({ status: 404, description: 'Appointment not found.' })
-  remove(@Param('id') id: string) {
+  removeSession(@Param('id') id: string) {
     return this.appointmentsService.remove(id);
   }
 
@@ -275,6 +296,183 @@ export class AppointmentsController {
       userId,
       userType,
       startDate,
+    );
+  }
+
+  @Post('group-therapy')
+  @ApiOperation({ summary: 'Create a new group therapy session' })
+  @ApiResponse({
+    status: 201,
+    description: 'The group therapy session has been successfully created.',
+  })
+  @ApiResponse({ status: 400, description: 'Bad Request.' })
+  @ApiResponse({ status: 404, description: 'Moderator not found.' })
+  create(@Body() createGroupTherapyDto: CreateGroupTherapyDto) {
+    return this.appointmentsService.creatSession(createGroupTherapyDto);
+  }
+
+  @Get('group-therapy')
+  @ApiOperation({ summary: 'Get all group therapy sessions' })
+  @ApiResponse({
+    status: 200,
+    description: 'Return all group therapy sessions with pagination.',
+  })
+  @ApiQuery({
+    name: 'topic',
+    required: false,
+    description: 'Filter by discussion topic',
+  })
+  @ApiQuery({
+    name: 'moderatorId',
+    required: false,
+    description: 'Filter by moderator ID',
+  })
+  @ApiQuery({
+    name: 'availableOnly',
+    required: false,
+    description: 'Show only available sessions',
+  })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Items per page' })
+  findAll(@Query() query: GroupTherapyQueryDto) {
+    return this.appointmentsService.findAllSession(query);
+  }
+
+  @Get('group-therapy/:id')
+  @ApiOperation({ summary: 'Get a group therapy session by ID' })
+  @ApiParam({ name: 'id', description: 'Group therapy session ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Return the group therapy session.',
+  })
+  @ApiResponse({ status: 404, description: 'Group therapy session not found.' })
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
+    return this.appointmentsService.findOneSession(id);
+  }
+
+  @Patch('group-therapy/:id')
+  @ApiOperation({ summary: 'Update a group therapy session' })
+  @ApiParam({ name: 'id', description: 'Group therapy session ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'The group therapy session has been successfully updated.',
+  })
+  @ApiResponse({ status: 404, description: 'Group therapy session not found.' })
+  @ApiResponse({ status: 400, description: 'Bad Request.' })
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() updateGroupTherapyDto: UpdateGroupTherapyDto,
+  ) {
+    return this.appointmentsService.updateSession(id, updateGroupTherapyDto);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete a group therapy session' })
+  @ApiParam({ name: 'id', description: 'Group therapy session ID' })
+  @ApiResponse({
+    status: 204,
+    description: 'The group therapy session has been successfully deleted.',
+  })
+  @ApiResponse({ status: 404, description: 'Group therapy session not found.' })
+  remove(@Param('id', ParseUUIDPipe) id: string) {
+    return this.appointmentsService.removeSession(id);
+  }
+
+  @Post(':id/join')
+  @ApiOperation({ summary: 'Join a group therapy session' })
+  @ApiParam({ name: 'id', description: 'Group therapy session ID' })
+  @ApiBody({ type: JoinGroupTherapyDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully joined the group therapy session.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Group therapy session or individual not found.',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Session is full or individual already joined.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Session has already started or passed.',
+  })
+  joinSession(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() joinGroupTherapyDto: JoinGroupTherapyDto,
+  ) {
+    return this.appointmentsService.joinSession(id, joinGroupTherapyDto);
+  }
+
+  @Delete(':id/leave/:individualId')
+  @ApiOperation({ summary: 'Leave a group therapy session' })
+  @ApiParam({ name: 'id', description: 'Group therapy session ID' })
+  @ApiParam({ name: 'individualId', description: 'Individual ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully left the group therapy session.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Group therapy session or individual not found.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Session has already started or passed.',
+  })
+  leaveSession(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('individualId', ParseUUIDPipe) individualId: string,
+  ) {
+    return this.appointmentsService.leaveSession(id, individualId);
+  }
+
+  @Get('moderator/:moderatorId')
+  @ApiOperation({ summary: 'Get group therapy sessions by moderator' })
+  @ApiParam({ name: 'moderatorId', description: 'Moderator (Therapist) ID' })
+  @ApiQuery({
+    name: 'topic',
+    required: false,
+    description: 'Filter by discussion topic',
+  })
+  @ApiQuery({
+    name: 'availableOnly',
+    required: false,
+    description: 'Show only available sessions',
+  })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Items per page' })
+  @ApiResponse({
+    status: 200,
+    description: 'Return group therapy sessions by moderator.',
+  })
+  getSessionsByModerator(
+    @Param('moderatorId', ParseUUIDPipe) moderatorId: string,
+    @Query() query: GroupTherapyQueryDto,
+  ) {
+    return this.appointmentsService.getSessionsByModerator(moderatorId, query);
+  }
+
+  @Get('participant/:individualId')
+  @ApiOperation({ summary: 'Get group therapy sessions by participant' })
+  @ApiParam({
+    name: 'individualId',
+    description: 'Individual (Participant) ID',
+  })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Items per page' })
+  @ApiResponse({
+    status: 200,
+    description: 'Return group therapy sessions by participant.',
+  })
+  getSessionsByParticipant(
+    @Param('individualId', ParseUUIDPipe) individualId: string,
+    @Query() query: GroupTherapyQueryDto,
+  ) {
+    return this.appointmentsService.getSessionsByParticipant(
+      individualId,
+      query,
     );
   }
 }

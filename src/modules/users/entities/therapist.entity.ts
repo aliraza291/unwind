@@ -66,7 +66,7 @@ export class Therapist extends BaseUser {
   @OneToMany(() => Appointment, (appointment) => appointment.therapist)
   therapistAppointments: Appointment[];
 
-  @OneToMany(() => GroupTherapy, (groupTherapy) => groupTherapy.therapist)
+  @OneToMany(() => GroupTherapy, (groupTherapy) => groupTherapy.moderator)
   groupTherapies: GroupTherapy[];
 
   @OneToMany(() => Note, (note) => note.createdBy)

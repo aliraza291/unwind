@@ -290,16 +290,17 @@ export class SchedulesService {
 
   // NEW: Helper method to parse date string as UTC
   private parseUTCDate(dateString: string): Date {
-    // Ensure the date string is treated as UTC by appending 'T00:00:00.000Z' if needed
     if (dateString.includes('T')) {
-      return new Date(dateString);
+      // Extract just the date part and create UTC date at midnight
+      const datePart = dateString.split('T')[0];
+      const [year, month, day] = datePart.split('-').map(Number);
+      return new Date(Date.UTC(year, month - 1, day));
     }
 
     // For YYYY-MM-DD format, explicitly create UTC date
     const [year, month, day] = dateString.split('-').map(Number);
-    return new Date(Date.UTC(year, month - 1, day)); // month is 0-indexed in Date constructor
+    return new Date(Date.UTC(year, month - 1, day));
   }
-
   // NEW: Helper method to format date as UTC string (YYYY-MM-DD)
   private formatUTCDate(date: Date): string {
     const year = date.getUTCFullYear();

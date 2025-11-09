@@ -84,9 +84,9 @@ jobs:
         key: ${{ secrets.UNWIND_DEV_DEPLOY }}
         script: |
             echo "Cleaning target directory..."
-            sudo rm -rf /var/www/unwind/frontend/unwind/*
+            sudo rm -rf /var/www/unwind/backend/unwind/*
             echo "Copying new build..."
-            sudo cp -r /home/ubuntu/backend/unwind/* /var/www/unwind/frontend/unwind/
+            sudo cp -r /home/ubuntu/backend/unwind/* /var/www/unwind/backend/unwind/
     
     - name: Deploy Environment
       uses: appleboy/ssh-action@v0.1.6
@@ -95,7 +95,7 @@ jobs:
         username: ubuntu
         key: ${{ secrets.UNWIND_DEV_DEPLOY }}
         script: |
-            sudo cp /var/www/unwind/env/backend/.env /var/www/unwind/frontend/unwind//.env
+            sudo cp /var/www/unwind/env/backend/.env /var/www/unwind/backend/unwind//.env
 
     - name: Start service
       uses: appleboy/ssh-action@v0.1.6

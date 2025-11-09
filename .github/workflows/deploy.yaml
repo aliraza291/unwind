@@ -97,7 +97,7 @@ jobs:
         script: |
             sudo cp /var/www/unwind/env/backend/.env /var/www/unwind/frontend/unwind//.env
 
-    - name: Stop service
+    - name: Start service
       uses: appleboy/ssh-action@v0.1.6
       with:
         host: ${{ secrets.UNWIND_DEV_IP }}

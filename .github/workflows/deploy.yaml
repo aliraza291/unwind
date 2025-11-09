@@ -37,6 +37,15 @@ jobs:
     - name: Zip build folder excluding Git files
       run: |
         zip -r build.zip . -x "*.git*" -x ".github/*"
+    
+    - name: Clean Server
+      uses: appleboy/ssh-action@v0.1.6
+      with:
+        host: ${{ secrets.UNWIND_DEV_IP }}
+        username: ubuntu
+        key: ${{ secrets.UNWIND_DEV_DEPLOY }}
+        script: |
+            sudo rm -rf /home/ubuntu/backend/*
 
     - name: Push build to EC2
       uses: appleboy/scp-action@v0.1.4
@@ -63,6 +72,8 @@ jobs:
         username: ubuntu
         key: ${{ secrets.UNWIND_DEV_DEPLOY }}
         script: |
+            export NVM_DIR=~/.nvm
+            source ~/.nvm/nvm.sh
             pm2 stop unwind-backend
 
     - name: Deploy Service
@@ -93,13 +104,6 @@ jobs:
         username: ubuntu
         key: ${{ secrets.UNWIND_DEV_DEPLOY }}
         script: |
+            export NVM_DIR=~/.nvm
+            source ~/.nvm/nvm.sh
             pm2 start unwind-backend
-
-    - name: Clean Server
-      uses: appleboy/ssh-action@v0.1.6
-      with:
-        host: ${{ secrets.UNWIND_DEV_IP }}
-        username: ubuntu
-        key: ${{ secrets.UNWIND_DEV_DEPLOY }}
-        script: |
-            sudo rm -rf /home/ubuntu/backend/*

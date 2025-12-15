@@ -3,39 +3,21 @@ import {
   IsNotEmpty,
   IsEnum,
   IsString,
-  IsNumber,
+  IsBoolean,
   IsOptional,
+  IsNumber,
   IsArray,
-  IsDateString,
 } from 'class-validator';
 import { DayOfWeek } from '../entities/schedule.entity';
 
-export class CreateScheduleRangeDto {
+export class CreateScheduleDto {
   @ApiProperty({
-    description: 'Start date of the range in UTC',
-    example: '2024-09-01T00:00:00.000Z',
-  })
-  @IsNotEmpty()
-  @IsDateString()
-  startDate: string;
-
-  @ApiProperty({
-    description: 'End date of the range in UTC',
-    example: '2024-09-30T23:59:59.999Z',
-  })
-  @IsNotEmpty()
-  @IsDateString()
-  endDate: string;
-
-  @ApiProperty({
-    description: 'Selected days of the week',
+    description: 'Day of the week',
     enum: DayOfWeek,
-    isArray: true,
-    example: [DayOfWeek.MONDAY, DayOfWeek.FRIDAY, DayOfWeek.TUESDAY],
+    example: DayOfWeek.MONDAY,
   })
-  @IsArray()
-  @IsEnum(DayOfWeek, { each: true })
-  daysOfWeek: DayOfWeek[];
+  @IsEnum(DayOfWeek)
+  dayOfWeek: DayOfWeek;
 
   @ApiProperty({ description: 'Start time in HH:MM format', example: '09:00' })
   @IsNotEmpty()
@@ -48,45 +30,54 @@ export class CreateScheduleRangeDto {
   endTime: string;
 
   @ApiProperty({
-    description: 'Duration of each slot in minutes',
-    example: 30,
-    default: 30,
+    description: 'Whether this time slot is available',
+    default: true,
+    required: false,
   })
   @IsOptional()
-  @IsNumber()
-  slotDuration?: number = 30;
-
-  @ApiProperty({
-    description: 'Gap between slots in minutes',
-    example: 0,
-    default: 0,
-  })
-  @IsOptional()
-  @IsNumber()
-  gapBetweenSlots?: number = 0;
+  @IsBoolean()
+  isAvailable?: boolean;
 
   @ApiProperty({ description: 'ID of the therapist' })
   @IsNotEmpty()
   @IsString()
   therapistId: string;
 
-  @ApiProperty({ example: 1000, required: false })
+  @ApiProperty({ example: 1000 })
   @IsOptional()
   @IsNumber()
   audioFee?: number;
 
-  @ApiProperty({ example: 800, required: false })
+  @ApiProperty({ example: 800 })
   @IsOptional()
   @IsNumber()
   videoFee?: number;
 
-  @ApiProperty({ example: 1500, required: false })
+  @ApiProperty({ example: 1500 })
   @IsOptional()
   @IsNumber()
   audioVideoFee?: number;
 
-  @ApiProperty({ example: 500, required: false })
+  @ApiProperty({ example: 500 })
   @IsOptional()
   @IsNumber()
   textFee?: number;
+
+  @ApiProperty({
+    description: 'Available slots in HH:mm format',
+    example: ['09:00', '10:00', '11:00'],
+  })
+  @IsArray()
+  @IsString({ each: true })
+  availableSlots: string[];
+
+  @ApiProperty({
+    description: 'Booked slots in HH:mm format',
+    example: ['10:00'],
+    required: false,
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  bookedSlots?: string[];
 }

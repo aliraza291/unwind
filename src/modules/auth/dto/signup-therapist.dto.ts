@@ -84,11 +84,4 @@ export class SignupTherapistDto {
   @IsEnum(UserType)
   @IsNotEmpty()
   userType: UserType = UserType.THERAPIST;
-
-  @ApiPropertyOptional({
-    description: 'company',
-    example: 'companyId',
-  })
-  @IsString()
-  company?: string;
 }

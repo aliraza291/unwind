@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Body,
+  Patch,
   Param,
   Delete,
   Query,
@@ -17,84 +18,52 @@ import {
   ApiQuery,
   ApiBearerAuth,
 } from '@nestjs/swagger';
-import { Schedule, SlotStatus } from './entities/schedule.entity';
+import { CreateScheduleDto } from './dto/create-schedule.dto';
+
+import { Schedule } from './entities/schedule.entity';
 import { JwtAuthGuard } from '../auth/guards/local-auth.guard';
+import { UpdateScheduleDto } from './dto/update-schedule.dto';
 import { SchedulesService } from './entities/schedules.service';
-import { CreateScheduleRangeDto } from './dto/create-schedule.dto';
+import { BulkCreateScheduleDto } from './dto/bulk-create-schedule';
 
 @ApiTags('schedules')
 @Controller('schedules')
 export class SchedulesController {
   constructor(private readonly schedulesService: SchedulesService) {}
 
-  @Post('range')
+  @Post()
   // @UseGuards(JwtAuthGuard)
   // @ApiBearerAuth()
-  @ApiOperation({
-    summary: 'Create schedule slots for specific days within a date range',
-    description:
-      'Creates schedule slots for selected days of the week within a specified UTC date range',
-  })
-  @ApiBody({ type: CreateScheduleRangeDto })
+  @ApiOperation({ summary: 'Create a new schedule slot' })
+  @ApiBody({ type: CreateScheduleDto })
   @ApiResponse({
     status: 201,
-    description:
-      'The schedule slots have been successfully created for the date range.',
-    type: [Schedule],
+    description: 'The schedule slot has been successfully created.',
+    type: Schedule,
   })
-  @ApiResponse({
-    status: 400,
-    description: 'Bad request - Invalid date range or time format.',
-  })
-  @ApiResponse({ status: 404, description: 'Therapist not found.' })
-  createScheduleRange(@Body() createScheduleRangeDto: CreateScheduleRangeDto) {
-    return this.schedulesService.createScheduleRange(createScheduleRangeDto);
+  @ApiResponse({ status: 400, description: 'Bad request.' })
+  create(@Body() createScheduleDto: CreateScheduleDto) {
+    return this.schedulesService.create(createScheduleDto);
   }
 
-  @Get('therapist/:therapistId/date-range')
+  @Post('bulk')
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({
-    summary: 'Get schedule slots for a therapist within a date range',
-  })
-  @ApiParam({ name: 'therapistId', type: 'string' })
-  @ApiQuery({
-    name: 'startDate',
-    type: 'string',
-    description: 'Start date in UTC (ISO 8601)',
-  })
-  @ApiQuery({
-    name: 'endDate',
-    type: 'string',
-    description: 'End date in UTC (ISO 8601)',
-  })
+  @ApiOperation({ summary: 'Create multiple schedule slots at once' })
+  @ApiBody({ type: BulkCreateScheduleDto })
   @ApiResponse({
-    status: 200,
-    description:
-      'Return schedule slots for the therapist within the date range',
+    status: 201,
+    description: 'The schedule slots have been successfully created.',
     type: [Schedule],
   })
-  @ApiQuery({
-    name: 'status',
-    required: false,
-    enum: SlotStatus, // ✅ Use enum here to document possible values
-    type: String, // ✅ Valid type
-    description: 'Status of the slot',
-  })
-  findByDateRange(
-    @Param('therapistId') therapistId: string,
-    @Query('startDate') startDate: string,
-    @Query('endDate') endDate: string,
-    @Query('status') status?: SlotStatus,
-  ) {
-    return this.schedulesService.findByDateRange(
-      therapistId,
-      startDate,
-      endDate,
-      status
-    );
+  @ApiResponse({ status: 400, description: 'Bad request.' })
+  bulkCreate(@Body() bulkCreateScheduleDto: BulkCreateScheduleDto) {
+    return this.schedulesService.bulkCreate(bulkCreateScheduleDto);
   }
 
   @Get()
+  // @UseGuards(JwtAuthGuard)
+  // @ApiBearerAuth()
   @ApiOperation({ summary: 'Get all schedule slots' })
   @ApiQuery({ name: 'therapistId', required: false, type: String })
   @ApiQuery({ name: 'dayOfWeek', required: false, type: String })
@@ -152,6 +121,25 @@ export class SchedulesController {
   @ApiResponse({ status: 404, description: 'Schedule slot not found.' })
   findOne(@Param('id') id: string) {
     return this.schedulesService.findOne(id);
+  }
+
+  @Patch(':id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update a schedule slot' })
+  @ApiParam({ name: 'id', type: 'string' })
+  @ApiBody({ type: UpdateScheduleDto })
+  @ApiResponse({
+    status: 200,
+    description: 'The schedule slot has been successfully updated.',
+    type: Schedule,
+  })
+  @ApiResponse({ status: 404, description: 'Schedule slot not found.' })
+  update(
+    @Param('id') id: string,
+    @Body() updateScheduleDto: UpdateScheduleDto,
+  ) {
+    return this.schedulesService.update(id, updateScheduleDto);
   }
 
   @Delete(':id')

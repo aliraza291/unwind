@@ -16,10 +16,10 @@ export class QualificationDto {
   @IsString()
   degreeTitle: string;
 
-  @ApiProperty({ example: "05-18-2025" })
+  @ApiProperty({ example: 2021 })
   @IsNotEmpty()
-  @IsString()
-  completionYear: string;
+  @IsNumber()
+  completionYear: number;
 
   @ApiPropertyOptional({ example: 3.7 })
   @IsOptional()
@@ -66,23 +66,22 @@ export class EmploymentHistoryDto {
 
 export class TherapistProfileCompletionDto {
   @ApiProperty({ example: 'Dr.' })
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
   title: string;
 
   @ApiProperty({ example: ['Anxiety', 'Depression'] })
   @IsArray()
   @IsString({ each: true })
-  @IsOptional()
   expertise: string[];
 
   @ApiProperty({ example: '35202-1234567-1' })
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
   cnic: string;
 
   @ApiProperty({ example: 'Started my journey with...' })
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
   careerJourney: string;
 
@@ -95,12 +94,10 @@ export class TherapistProfileCompletionDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => QualificationDto)
-  @IsOptional()
   qualifications: QualificationDto[];
 
   @ApiProperty({ type: [EmploymentHistoryDto] })
   @IsArray()
-  @IsOptional()
   @ValidateNested({ each: true })
   @Type(() => EmploymentHistoryDto)
   employmentHistory: EmploymentHistoryDto[];

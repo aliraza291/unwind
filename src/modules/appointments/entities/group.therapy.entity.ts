@@ -10,46 +10,29 @@ import Model from '@/common/entities/base.entity';
 import { Therapist } from '@/modules/users/entities/therapist.entity';
 import { Individual } from '@/modules/users/entities/individual.entity';
 
-export enum GroupTherapyTopic {
-  DEPRESSION = 'Depression',
-  ANXIETY = 'Anxiety',
-  ADHD = 'ADHD',
-  SLEEP_DISORDER = 'Sleep Disorder',
-  BIPOLAR_DISORDER = 'Bipolar Disorder',
-}
-
 @Entity()
 export class GroupTherapy extends Model {
   @Column()
-  title: string;
-
-  @Column()
-  numberOfSessions: number;
-
-  @Column({
-    type: 'enum',
-    enum: GroupTherapyTopic,
-  })
-  discussionTopic: GroupTherapyTopic;
+  name: string;
 
   @Column({ type: 'text', nullable: true })
-  aboutTheSession: string;
+  description: string;
 
   @Column({ type: 'timestamp' })
-  date: Date;
+  startTime: Date;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2 })
-  sessionPrice: number;
+  @Column({ type: 'timestamp' })
+  endTime: Date;
 
   @Column({ default: 0 })
-  participantCapacity: number;
+  maxParticipants: number;
 
   @ManyToOne(() => Therapist, (therapist) => therapist.groupTherapies)
-  @JoinColumn({ name: 'moderatorId' })
-  moderator: Therapist;
+  @JoinColumn({ name: 'therapistId' })
+  therapist: Therapist;
 
   @Column()
-  moderatorId: string;
+  therapistId: string;
 
   @ManyToMany(() => Individual, (individual) => individual.groupTherapySessions)
   @JoinTable({
@@ -58,14 +41,4 @@ export class GroupTherapy extends Model {
     inverseJoinColumn: { name: 'individualId', referencedColumnName: 'id' },
   })
   participants: Individual[];
-
-  // Virtual property to get current participant count
-  get currentParticipantCount(): number {
-    return this.participants ? this.participants.length : 0;
-  }
-
-  // Check if group is full
-  get isFull(): boolean {
-    return this.currentParticipantCount >= this.participantCapacity;
-  }
 }

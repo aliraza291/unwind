@@ -22,7 +22,6 @@ import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { LoginDto } from './dto/login.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { UserType } from '@/common/enums/role-type.enum';
-import { ResendOtpDto } from './dto/resend-otp';
 
 @Injectable()
 export class AuthService {
@@ -49,7 +48,6 @@ export class AuthService {
       const { otp, expiry } = this.otpService.generateOtp();
       individual.otp = otp;
       individual.otpExpiry = expiry;
-      individual.email = data.email;
 
       await this.individualRepository.save(existingUser);
 
@@ -137,7 +135,7 @@ export class AuthService {
     therapist.nationality = data.nationality;
     therapist.specialization = data.specialization;
     therapist.userType = UserType.THERAPIST;
-    therapist.company = { id: data.company } as Company;
+    // therapist.company = { id: data.company } as Company;
     // Generate OTP for email verification
     const { otp, expiry } = this.otpService.generateOtp();
     therapist.otp = otp;
@@ -239,17 +237,15 @@ export class AuthService {
         userType: UserType.COMPANY,
       };
     } else {
-      let user = null;
+      let repository;
 
       if (data.userType === UserType.INDIVIDUAL) {
-        user = await this.individualRepository.findOne({
-          where: { email: data.email },
-        });
+        repository = this.individualRepository;
       } else {
-        user = await this.therapistRepository.findOne({
-          where: { email: data.email },
-        });
+        repository = this.therapistRepository;
       }
+
+      const user = await repository.findOne({ where: { email: data.email } });
 
       if (!user) {
         throw new NotFoundException('User not found');
@@ -267,50 +263,12 @@ export class AuthService {
       user.otp = null;
       user.otpExpiry = null;
 
-      if (data.userType === UserType.INDIVIDUAL) {
-        await this.individualRepository.save(user);
-      } else {
-        await this.therapistRepository.save(user);
-      }
+      await repository.save(user);
 
       return {
         message: 'Email verified successfully',
         userType: user.userType,
       };
-    }
-  }
-
-    async resendOtp(data: ResendOtpDto) {
-    let existingUser = null;
-
-    if (data.userType === UserType.INDIVIDUAL) {
-      existingUser = await this.individualRepository.findOne({
-        where: { email: data.email },
-      });
-    } else {
-      existingUser = await this.therapistRepository.findOne({
-        where: { email: data.email },
-      });
-    }
-
-    if (!existingUser) {
-      throw new NotFoundException('User not found');
-    }
-
-    if (existingUser) {
-      const { otp, expiry } = this.otpService.generateOtp();
-      existingUser.otp = otp;
-      existingUser.otpExpiry = expiry;
-      existingUser.email = data.email;
-
-      if (data.userType === UserType.INDIVIDUAL) {
-        await this.individualRepository.save(existingUser);
-      } else {
-        await this.therapistRepository.save(existingUser);
-      }
-
-      // Send OTP email
-      await this.otpService.sendOtpByEmail(existingUser.email, otp);
     }
   }
 
@@ -382,17 +340,9 @@ export class AuthService {
 
       // Send OTP email
       await this.otpService.sendOtpByEmail(user.email, otp);
-      const statusCode = HttpStatus.BAD_REQUEST; // or any other status dynamically
-      const message =
-        'Your account is not verified yet please check your email';
-
-      throw new BadRequestException({
-        statusCode,
-        message,
-        error: 'Bad Request', // You can also generate this dynamically based on status code if needed
-        userType: user?.userType,
-        email: user?.email,
-      });
+      throw new BadRequestException(
+        'Your account is not verified yet please check your email',
+      );
     }
 
     const isPasswordValid = await bcrypt.compare(data.password, user.password);
@@ -431,10 +381,6 @@ export class AuthService {
         company: companyData,
         isEmailVerified: user.isEmailVerified,
         profileCompletionStep: user.profileCompletionStep,
-        userName: user.userName,
-        genderIdentity: user.genderIdentity,
-        age: user.age,
-        isProfileComplete: user?.isProfileComplete,
       },
     };
   }

@@ -8,7 +8,7 @@ export class TherapistQualification extends Model {
   degreeTitle: string;
 
   @Column()
-  completionYear: string;
+  completionYear: number;
 
   @Column({ type: 'decimal', precision: 4, scale: 2, nullable: true })
   cgpa: number;

@@ -74,15 +74,6 @@ export class AuthService {
     individual.userType = UserType.INDIVIDUAL;
 
     // If company ID is provided, link to company
-    if (data.companyId) {
-      const company = await this.companyRepository.findOne({
-        where: { id: data.companyId },
-      });
-      if (!company) {
-        throw new NotFoundException('Company not found');
-      }
-      individual.company = company;
-    }
 
     // Generate OTP for email verification
     const { otp, expiry } = this.otpService.generateOtp();

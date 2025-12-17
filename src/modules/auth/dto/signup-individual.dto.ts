@@ -82,14 +82,6 @@ export class SignupIndividualDto {
   @IsString({ each: true })
   reasonForTherapy: string[];
 
-  @ApiPropertyOptional({
-    description: 'ID of the company if the individual is associated with one',
-    example: 'company-uuid-123',
-  })
-  @IsString()
-  @IsOptional()
-  companyId?: string;
-
   @ApiProperty({
     description: 'User type, default is INDIVIDUAL',
     enum: UserType,
